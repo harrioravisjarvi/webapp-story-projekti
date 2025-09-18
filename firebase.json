@@ -1,0 +1,23 @@
+{
+  "hosting": {
+    "public": "apps",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      { "source": "/", "destination": "/webappstory/dist/index.html" },
+
+      { "source": "/HSTPT", "destination": "/HSTPT/dist/index.html" },
+      { "source": "/HSTPT/**", "destination": "/HSTPT/dist/index.html" },
+
+      { "source": "/cosmicweather", "destination": "/cosmicweather/dist/index.html" },
+      { "source": "/cosmicweather/**", "destination": "/cosmicweather/dist/index.html" },
+
+      { "source": "/photoadventure", "destination": "/photoadventure/dist/index.html" },
+      { "source": "/photoadventure/**", "destination": "/photoadventure/dist/index.html" }
+    ]
+  }
+}
+
