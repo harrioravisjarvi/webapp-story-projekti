@@ -1,4 +1,4 @@
-name: Firebase Studio Commit
+    name: Firebase Studio Commit
 
 on:
   # Firebase Studio voi laukaista repository_dispatch -tapahtuman (tai käytä käsin workflow_dispatchia).
@@ -46,13 +46,13 @@ jobs:
           git commit -m "chore: Firebase Studio sync"
 
       # Pushaa suoraan mainiin:
-- name: Push to default branch
-  env:
-    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  run: |
-    # Pakota remote käyttämään tokenia (muuten tulee "could not read Username")
-    git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git
-    git push origin HEAD:${TARGET_BRANCH}
+      - name: Push to default branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Pakota remote käyttämään tokenia
+    git remote set-url origin https://x-access-token:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY.git
+    git push origin HEAD:$TARGET_BRANCH
 
       # (Vaihtoehto PR:n tekoon suoran pushin sijasta)
       # - name: Create PR
