@@ -1,14 +1,16 @@
-    name: Firebase Studio Commit
+name: Firebase Studio Commit
 
 on:
-  # Firebase Studio voi laukaista repository_dispatch -tapahtuman (tai käytä käsin workflow_dispatchia).
+  workflow_dispatch: {}
   repository_dispatch:
     types: [firebase-studio-update]
-  workflow_dispatch:
 
 permissions:
-  contents: write   # 🔑 mahdollistaa commit/push
+  contents: write
   pull-requests: write
+
+env:
+  TARGET_BRANCH: main  # ← vaihda tarvittaessa (esim. master)
 
 jobs:
   commit-and-push:
@@ -17,7 +19,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          persist-credentials: false  # käytetään alla GITHUB_TOKENia erikseen
           fetch-depth: 0
 
       - name: Configure git identity
@@ -25,18 +26,13 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      # 🔧 Tee tähän haluamasi muutos. Esimerkin vuoksi päivitetään tiedosto.
+      # Tee aina pieni muutos, jotta näet committiä syntyvän testissä
       - name: Apply change
         run: |
           mkdir -p tools
           echo "{\"updatedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > tools/firebase-studio-sync.json
 
-      # (Valinnainen) Luo haara PR:ää varten sen sijaan, että pushaat suoraan mainiin:
-      # - name: Create/checkout branch
-      #   run: |
-      #     git checkout -B chore/firebase-studio-sync
-
-      - name: Commit
+      - name: Commit changes
         run: |
           git add -A
           if git diff --cached --quiet; then
@@ -45,20 +41,23 @@ jobs:
           fi
           git commit -m "chore: Firebase Studio sync"
 
-      # Pushaa suoraan mainiin:
       - name: Push to default branch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Pakota remote käyttämään tokenia
-    git remote set-url origin https://x-access-token:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY.git
-    git push origin HEAD:$TARGET_BRANCH
+          git remote set-url origin https://x-access-token:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY.git
+          git push origin HEAD:$TARGET_BRANCH
 
-      # (Vaihtoehto PR:n tekoon suoran pushin sijasta)
-      # - name: Create PR
+      # --- PR-vaihtoehto (jos et halua suoraa pushia), poista yllä oleva Push-step ja käytä alla ---
+      # - name: Create/checkout branch
+      #   run: git checkout -B chore/firebase-studio-sync
+      #
+      # - name: Open PR
       #   uses: peter-evans/create-pull-request@v6
       #   with:
       #     token: ${{ secrets.GITHUB_TOKEN }}
       #     branch: chore/firebase-studio-sync
       #     title: "chore: Firebase Studio sync"
       #     body: "Automated sync from Firebase Studio"
+      #     base: ${{ env.TARGET_BRANCH }}
