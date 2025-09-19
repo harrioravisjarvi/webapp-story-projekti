@@ -13,6 +13,8 @@ env:
   TARGET_BRANCH: main
   FIREBASE_PROJECT_ID: ai-artifacts-journey
   FIREBASE_HOSTING_SITE: ai-artifacts-journey
+  # Lista applikaatiokansioista firebase.jsonin rewriten mukaan (apps/<APP>/dist/index.html)
+  APP_DIRS: "webappstory HSTPT cosmicweather photoadventure"
 
 jobs:
   publish:
@@ -29,25 +31,23 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      # Rakenna appit jos niillä on oma package.json apps/* -hakemistoissa
-      - name: Build apps (if package.json exists)
+      # Luo placeholderit vain jos dist/index.html puuttuu
+      - name: Ensure dist placeholders (only if missing)
         run: |
           set -e
-          for app in webappstory HSTPT cosmicweather photoadventure; do
-            if [ -f "apps/$app/package.json" ]; then
-              echo "Building apps/$app…"
-              (cd "apps/$app" && npm ci && npm run build)
+          mkdir -p apps
+          for app in $APP_DIRS; do
+            mkdir -p "apps/$app/dist"
+            f="apps/$app/dist/index.html"
+            if [ ! -f "$f" ]; then
+              echo "<!doctype html><html><head><meta charset='utf-8'><title>$app</title></head><body><h1>$app placeholder</h1><p>Generated at $(date -u +%Y-%m-%dT%H:%M:%SZ)</p></body></html>" > "$f"
+              echo "Created $f"
             else
-              echo "Skipping apps/$app (no package.json)"
+              echo "Exists: $f"
             fi
           done
 
-      # (Valinnainen) leimataan julkaisuhetki että syntyy commit
+      # (Valinnainen) pieni leima, jotta commit varmasti syntyy
       - name: Stamp publish info
         run: |
           mkdir -p tools
@@ -59,7 +59,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else
-            git commit -m "chore: publish via Firebase Studio"
+            git commit -m "chore: publish via Firebase Studio (placeholders)"
           fi
 
       - name: Push to default branch (token remote)
@@ -69,16 +69,29 @@ jobs:
           git remote set-url origin https://x-access-token:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY.git
           git push origin HEAD:$TARGET_BRANCH || true
 
+      - name: Setup Node (for Firebase CLI)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Install Firebase CLI
         run: npm i -g firebase-tools
 
-      # Vapaaehtoinen: listaa mitä ollaan deployaamassa
-      - name: List files under apps/
+      # Pieni diagnostiikka: näkyykö dist/index.html -tiedostoja?
+      - name: List dist index files
         run: |
-          ls -la apps || true
-          find apps -maxdepth 2 -name index.html | sed 's/^/ • /' || true
+          echo "Looking for apps/*/dist/index.html ..."
+          find apps -type f -path "*/dist/index.html" -print | sed 's/^/ • /' || true
 
-      - name: Deploy to Firebase Hosting (default site)
+      - name: Inspect Hosting setup (sites & domains)
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          firebase hosting:sites:list --project "$FIREBASE_PROJECT_ID"
+          echo "-----"
+          firebase hosting:domains:list --project "$FIREBASE_PROJECT_ID" || true
+
+      - name: Deploy to Firebase Hosting
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
         run: |
