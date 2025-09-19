@@ -1,0 +1,63 @@
+name: Firebase Studio Commit
+
+on:
+  # Firebase Studio voi laukaista repository_dispatch -tapahtuman (tai käytä käsin workflow_dispatchia).
+  repository_dispatch:
+    types: [firebase-studio-update]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # 🔑 mahdollistaa commit/push
+  pull-requests: write
+
+jobs:
+  commit-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false  # käytetään alla GITHUB_TOKENia erikseen
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      # 🔧 Tee tähän haluamasi muutos. Esimerkin vuoksi päivitetään tiedosto.
+      - name: Apply change
+        run: |
+          mkdir -p tools
+          echo "{\"updatedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > tools/firebase-studio-sync.json
+
+      # (Valinnainen) Luo haara PR:ää varten sen sijaan, että pushaat suoraan mainiin:
+      # - name: Create/checkout branch
+      #   run: |
+      #     git checkout -B chore/firebase-studio-sync
+
+      - name: Commit
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "chore: Firebase Studio sync"
+
+      # Pushaa suoraan mainiin:
+      - name: Push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Vaihda 'main' -> oma oletushaarasi tarvittaessa
+          git push origin HEAD:main
+
+      # (Vaihtoehto PR:n tekoon suoran pushin sijasta)
+      # - name: Create PR
+      #   uses: peter-evans/create-pull-request@v6
+      #   with:
+      #     token: ${{ secrets.GITHUB_TOKEN }}
+      #     branch: chore/firebase-studio-sync
+      #     title: "chore: Firebase Studio sync"
+      #     body: "Automated sync from Firebase Studio"
