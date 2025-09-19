@@ -1,37 +1,70 @@
-name: Publish from Firebase Studio
+name: Build & Deploy to Firebase Hosting
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/**'
+      - 'firebase.json'
+      - '.github/workflows/firebase-studio-publish.yml'
   workflow_dispatch: {}
   repository_dispatch:
     types: [firebase-studio-publish, firebase-studio-update]
 
+# Ei tarvita repo-kirjoitusoikeuksia, koska emme commitoi tässä workflow'ssa
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 env:
-  TARGET_BRANCH: main
   FIREBASE_PROJECT_ID: ai-artifacts-journey
   FIREBASE_HOSTING_SITE: ai-artifacts-journey
-  # Lista applikaatiokansioista firebase.jsonin rewriten mukaan (apps/<APP>/dist/index.html)
+  # apps/<APP>/dist/index.html odotetaan rewriten mukaan:
   APP_DIRS: "webappstory HSTPT cosmicweather photoadventure"
 
 jobs:
-  publish:
+  deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Configure git identity
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Setup Node (for build & Firebase CLI)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-      # Luo placeholderit vain jos dist/index.html puuttuu
+      # Yritä buildata jokainen appi, jos niillä on package.json.
+      # Jos build tuottaa "build" tai "out", kopioi se dist:iin (firebase.json odottaa dist/).
+      - name: Build apps (npm/yarn/pnpm)
+        run: |
+          set -e
+          for app in $APP_DIRS; do
+            dir="apps/$app"
+            if [ -f "$dir/package.json" ]; then
+              echo "🔧 Building $dir ..."
+              if command -v npm >/dev/null 2>&1; then
+                (cd "$dir" && npm ci && npm run build)
+              elif command -v yarn >/dev/null 2>&1; then
+                (cd "$dir" && yarn install --frozen-lockfile && yarn build)
+              else
+                npm i -g pnpm
+                (cd "$dir" && pnpm install --frozen-lockfile && pnpm build)
+              fi
+              # Jos ulostulo on build/ tai out/, siirrä se dist/:iin
+              if [ -d "$dir/build" ]; then
+                rm -rf "$dir/dist"; mkdir -p "$dir/dist"; cp -R "$dir/build/"* "$dir/dist/"
+              fi
+              if [ -d "$dir/out" ]; then
+                rm -rf "$dir/dist"; mkdir -p "$dir/dist"; cp -R "$dir/out/"* "$dir/dist/"
+              fi
+            else
+              echo "ℹ️ Skipping $dir (no package.json)"
+            fi
+          done
+
+      # Varmista, että on aina jotain julkaistavaa (luo placeholder, jos dist puuttuu)
       - name: Ensure dist placeholders (only if missing)
         run: |
           set -e
@@ -47,49 +80,13 @@ jobs:
             fi
           done
 
-      # (Valinnainen) pieni leima, jotta commit varmasti syntyy
-      - name: Stamp publish info
-        run: |
-          mkdir -p tools
-          echo "{\"publishedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > tools/firebase-studio-sync.json
-
-      - name: Commit changes (if any)
-        run: |
-          git add -A
-          if git diff --cached --quiet; then
-            echo "No changes to commit."
-          else
-            git commit -m "chore: publish via Firebase Studio (placeholders)"
-          fi
-
-      - name: Push to default branch (token remote)
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git remote set-url origin https://x-access-token:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY.git
-          git push origin HEAD:$TARGET_BRANCH || true
-
-      - name: Setup Node (for Firebase CLI)
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install Firebase CLI
-        run: npm i -g firebase-tools
-
-      # Pieni diagnostiikka: näkyykö dist/index.html -tiedostoja?
       - name: List dist index files
         run: |
           echo "Looking for apps/*/dist/index.html ..."
           find apps -type f -path "*/dist/index.html" -print | sed 's/^/ • /' || true
 
-      - name: Inspect Hosting setup (sites & domains)
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
-        run: |
-          firebase hosting:sites:list --project "$FIREBASE_PROJECT_ID"
-          echo "-----"
-          firebase hosting:domains:list --project "$FIREBASE_PROJECT_ID" || true
+      - name: Install Firebase CLI
+        run: npm i -g firebase-tools
 
       - name: Deploy to Firebase Hosting
         env:
