@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "ai-artifacts-journey",
     "public": "apps",
     "ignore": [
       "firebase.json",
@@ -20,4 +21,3 @@
     ]
   }
 }
-
