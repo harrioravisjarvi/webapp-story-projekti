@@ -29,24 +29,25 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      # Jos sinulla EI vielä ole oikeaa buildia, tämä varmistaa demosisällön:
-      - name: Ensure demo content exists (optional)
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Rakenna appit jos niillä on oma package.json apps/* -hakemistoissa
+      - name: Build apps (if package.json exists)
         run: |
-          mkdir -p dist
-          if [ ! -f dist/index.html ]; then
-            echo "<!doctype html><html><body><h1>Hello from Hosting</h1></body></html>" > dist/index.html
-          fi
+          set -e
+          for app in webappstory HSTPT cosmicweather photoadventure; do
+            if [ -f "apps/$app/package.json" ]; then
+              echo "Building apps/$app…"
+              (cd "apps/$app" && npm ci && npm run build)
+            else
+              echo "Skipping apps/$app (no package.json)"
+            fi
+          done
 
-      # Jos haluat automaattisen buildin, korvaa yllä oleva askel tällä:
-      # - name: Setup Node
-      #   uses: actions/setup-node@v4
-      #   with:
-      #     node-version: '20'
-      # - name: Install & Build
-      #   run: |
-      #     npm ci
-      #     npm run build
-
+      # (Valinnainen) leimataan julkaisuhetki että syntyy commit
       - name: Stamp publish info
         run: |
           mkdir -p tools
@@ -68,21 +69,14 @@ jobs:
           git remote set-url origin https://x-access-token:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY.git
           git push origin HEAD:$TARGET_BRANCH || true
 
-      - name: Setup Node (for Firebase CLI)
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
       - name: Install Firebase CLI
         run: npm i -g firebase-tools
 
-      - name: Inspect Hosting setup (site & domains)
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+      # Vapaaehtoinen: listaa mitä ollaan deployaamassa
+      - name: List files under apps/
         run: |
-          firebase hosting:sites:list --project "$FIREBASE_PROJECT_ID"
-          echo "-----"
-          firebase hosting:domains:list --project "$FIREBASE_PROJECT_ID" || true
+          ls -la apps || true
+          find apps -maxdepth 2 -name index.html | sed 's/^/ • /' || true
 
       - name: Deploy to Firebase Hosting (default site)
         env:
