@@ -1,0 +1,64 @@
+name: Publish from Firebase Studio
+
+on:
+  repository_dispatch:
+    types: [firebase-studio-publish, firebase-studio-update]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  TARGET_BRANCH: main                 # vaihda jos oletushaara on esim. master
+  FIREBASE_PROJECT_ID: ai-artifacts-journey
+  FIREBASE_HOSTING_SITE: ai-artifacts-journey
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Stamp publish info
+        run: |
+          mkdir -p tools
+          echo "{\"publishedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > tools/firebase-studio-sync.json
+
+      - name: Commit changes
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "chore: publish via Firebase Studio"
+          fi
+
+      - name: Push to default branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git remote set-url origin https://x-access-token:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY.git
+          git push origin HEAD:$TARGET_BRANCH || true
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Firebase CLI
+        run: npm i -g firebase-tools
+
+      - name: Deploy to Firebase Hosting
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          firebase deploy --only hosting --project "$FIREBASE_PROJECT_ID" --site "$FIREBASE_HOSTING_SITE" --non-interactive
